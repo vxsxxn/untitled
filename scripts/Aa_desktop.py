@@ -84,8 +84,11 @@ PAGE = """<!doctype html>
   <h2>Settings</h2>
   <div><label>OpenRouter API key</label>
     <input id="sKey" type="password" placeholder="sk-or-… (leave blank to keep)"></div>
-  <div><label>Model</label>
-    <input id="sModel" placeholder="e.g. z-ai/glm-5.3-flash"></div>
+  <div><label>Model <small id="sModelHint" style="color:var(--dim)"></small></label>
+    <input id="sModelSearch" placeholder="search models…" autocomplete="off">
+    <select id="sModel" size="7" style="width:100%;background:var(--soft);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:4px;font:inherit"></select>
+    <input id="sModelCustom" placeholder="…or type an exact model id" autocomplete="off"
+           style="display:none;margin-top:6px"></div>
   <div><label>Approval mode</label>
     <select id="sMode" style="width:100%;background:var(--soft);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font:inherit">
       <option value="manual">manual — ask every time</option>
@@ -138,17 +141,48 @@ async function toggleMod(name,on,row){
 const st=document.getElementById('st');
 function poll(){fetch('/health').then(r=>r.json()).then(h=>{st.className=h.state;st.title='engine: '+h.state+(h.detail?' — '+h.detail:'')}).catch(()=>{st.className='degraded';st.title='engine unreachable'})}
 poll();setInterval(poll,5000);
+let MODELS=[];let CURRENT='';
+function renderModels(){
+  const q=document.getElementById('sModelSearch').value.toLowerCase().trim();
+  const sel=document.getElementById('sModel');
+  const free=MODELS.filter(m=>m.free&&(m.id+' '+m.name).toLowerCase().includes(q));
+  const paid=MODELS.filter(m=>!m.free&&(m.id+' '+m.name).toLowerCase().includes(q));
+  const list=[...free,...paid].slice(0,400);
+  sel.innerHTML='';
+  for(const m of list){
+    const o=document.createElement('option');
+    o.value=m.id;o.textContent=(m.free?'★ ':'')+m.name+'  ('+m.id+')';
+    if(m.id===CURRENT)o.selected=true;
+    sel.appendChild(o);
+  }
+  if(!list.length)sel.innerHTML='<option value="">no match — type an exact id below</option>';
+  document.getElementById('sModelHint').textContent=MODELS.length?MODELS.length+' models · ★ = free':'';
+  const noExact=!list.some(m=>m.id===CURRENT);
+  if(CURRENT&&noExact){
+    const o=document.createElement('option');o.value=CURRENT;o.textContent=CURRENT+' (current)';o.selected=true;
+    sel.insertBefore(o,sel.firstChild);
+  }
+}
+document.getElementById('sModelSearch').addEventListener('input',renderModels);
+document.getElementById('sModelCustom').addEventListener('input',e=>{
+  if(e.target.value.trim())document.getElementById('sModel').selectedIndex=-1;});
 async function openSettings(){
   document.getElementById('modal').classList.add('open');
-  document.getElementById('settingsMsg').textContent='';
+  document.getElementById('settingsMsg').textContent='loading…';
   try{
     const r=await fetch('/settings');const s=await r.json();
-    document.getElementById('sModel').value=s.model||'';
+    CURRENT=s.model||'';
     if(s.mode)document.getElementById('sMode').value=s.mode;
     if('allowlist' in s)document.getElementById('sAllow').value=(s.allowlist||[]).join(String.fromCharCode(10));
     document.getElementById('sKey').value='';document.getElementById('sKey').placeholder=
       s.api_key_set?'Saved — leave blank to keep':'sk-or-…';
   }catch(e){document.getElementById('settingsMsg').textContent='load failed: '+e;}
+  document.getElementById('sModelCustom').value='';
+  try{const r=await fetch('/models');const d=await r.json();
+    MODELS=d.models||[];if(!CURRENT)CURRENT=d.current||'';
+    renderModels();
+    document.getElementById('settingsMsg').textContent='';
+  }catch(e){renderModels();document.getElementById('settingsMsg').textContent='model list offline — exact id still works';}
 }
 function closeSettings(){document.getElementById('modal').classList.remove('open');}
 async function testKey(){
@@ -162,7 +196,8 @@ async function saveSettings(){
   try{
     const r=await fetch('/settings',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({api_key:document.getElementById('sKey').value.trim(),
-                           model:document.getElementById('sModel').value.trim()})});
+                           model:(document.getElementById('sModelCustom').value.trim()
+                                  ||document.getElementById('sModel').value||'').trim()})});
     const d=await r.json();
     if(d.error){msgEl.textContent='error: '+d.error;return;}
     msgEl.textContent='saved.';setTimeout(closeSettings,600);
@@ -348,6 +383,52 @@ def _write_env_key(api_key: str) -> None:
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as fh:
         fh.writelines(lines)
+
+
+_MODELS_CACHE: dict = {"ts": 0.0, "models": []}
+
+_FALLBACK_MODELS = [
+    {"id": "openai/gpt-4o-mini", "name": "OpenAI: GPT-4o mini"},
+    {"id": "openai/gpt-5-mini", "name": "OpenAI: GPT-5 mini"},
+    {"id": "deepseek/deepseek-chat-v3.1", "name": "DeepSeek: Chat v3.1"},
+    {"id": "google/gemma-4-31b-it:free", "name": "Google: Gemma 4 31B (free)"},
+    {"id": "meta-llama/llama-3.3-70b-instruct", "name": "Meta: Llama 3.3 70B"},
+    {"id": "qwen/qwen3-coder", "name": "Qwen: Qwen3 Coder"},
+    {"id": "moonshotai/kimi-k2", "name": "Moonshot: Kimi K2"},
+    {"id": "openrouter/free", "name": "OpenRouter: Free Models Router"},
+]
+
+
+def _fetch_models() -> list:
+    """OpenRouter's public model catalog (no key needed), cached 30 min."""
+    import time
+    import urllib.request
+
+    now = time.time()
+    if _MODELS_CACHE["models"] and now - _MODELS_CACHE["ts"] < 1800:
+        return _MODELS_CACHE["models"]
+    try:
+        req = urllib.request.Request("https://openrouter.ai/api/v1/models",
+                                     headers={"User-Agent": "Untitled-desktop"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.load(r)["data"]
+        models = sorted(
+            ({"id": m["id"], "name": m.get("name") or m["id"],
+              "free": str(m.get("pricing", {}).get("prompt", "1")) == "0"}
+             for m in data),
+            key=lambda m: m["id"])
+        _MODELS_CACHE["ts"], _MODELS_CACHE["models"] = now, models
+        return models
+    except Exception:
+        if _MODELS_CACHE["models"]:
+            return _MODELS_CACHE["models"]  # stale cache beats a fake list
+        return [dict(m, free=False) for m in _FALLBACK_MODELS]
+
+
+def _models_get(self) -> None:
+    models = _fetch_models()
+    body = json.dumps({"models": models, "current": _read_model()}).encode()
+    self._send(200, body, "application/json")
 
 
 def _settings_get(self) -> None:
@@ -614,6 +695,8 @@ class Handler(BaseHTTPRequestHandler):
             return _settings_get(self)
         if self.path == "/test-key":
             return _test_key(self)
+        if self.path == "/models":
+            return _models_get(self)
         if self.path == "/mods":
             return self._send(200, json.dumps({"mods": _list_mods()}).encode(), "application/json")
         self._send(200, PAGE.encode(), "text/html; charset=utf-8")
