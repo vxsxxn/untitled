@@ -161,18 +161,16 @@ let MODELS=[];let CURRENT='';
 function renderModels(){
   const q=document.getElementById('sModelSearch').value.toLowerCase().trim();
   const sel=document.getElementById('sModel');
-  const free=MODELS.filter(m=>m.free&&(m.id+' '+m.name).toLowerCase().includes(q));
-  const paid=MODELS.filter(m=>!m.free&&(m.id+' '+m.name).toLowerCase().includes(q));
-  const list=[...free,...paid].slice(0,400);
+  const list=MODELS.filter(m=>(m.id+' '+m.name).toLowerCase().includes(q)).slice(0,400);
   sel.innerHTML='';
   for(const m of list){
     const o=document.createElement('option');
-    o.value=m.id;o.textContent=(m.free?'★ ':'')+m.name+'  ('+m.id+')';
+    o.value=m.id;o.textContent=m.name+'  ('+m.id+')';
     if(m.id===CURRENT)o.selected=true;
     sel.appendChild(o);
   }
   if(!list.length)sel.innerHTML='<option value="">no match — type an exact id below</option>';
-  document.getElementById('sModelHint').textContent=MODELS.length?MODELS.length+' models · ★ = free':'';
+  document.getElementById('sModelHint').textContent=MODELS.length?MODELS.length+' free models — no cost on any of them':'';
   const noExact=!list.some(m=>m.id===CURRENT);
   if(CURRENT&&noExact){
     const o=document.createElement('option');o.value=CURRENT;o.textContent=CURRENT+' (current)';o.selected=true;
@@ -477,14 +475,12 @@ def _write_env_key(api_key: str) -> None:
 _MODELS_CACHE: dict = {"ts": 0.0, "models": []}
 
 _FALLBACK_MODELS = [
-    {"id": "openai/gpt-4o-mini", "name": "OpenAI: GPT-4o mini"},
-    {"id": "openai/gpt-5-mini", "name": "OpenAI: GPT-5 mini"},
-    {"id": "deepseek/deepseek-chat-v3.1", "name": "DeepSeek: Chat v3.1"},
-    {"id": "google/gemma-4-31b-it:free", "name": "Google: Gemma 4 31B (free)"},
-    {"id": "meta-llama/llama-3.3-70b-instruct", "name": "Meta: Llama 3.3 70B"},
-    {"id": "qwen/qwen3-coder", "name": "Qwen: Qwen3 Coder"},
-    {"id": "moonshotai/kimi-k2", "name": "Moonshot: Kimi K2"},
     {"id": "openrouter/free", "name": "OpenRouter: Free Models Router"},
+    {"id": "google/gemma-4-31b-it:free", "name": "Google: Gemma 4 31B (free)"},
+    {"id": "meta-llama/llama-3.3-70b-instruct:free", "name": "Meta: Llama 3.3 70B (free)"},
+    {"id": "qwen/qwen3-coder:free", "name": "Qwen: Qwen3 Coder (free)"},
+    {"id": "deepseek/deepseek-chat-v3.1:free", "name": "DeepSeek: Chat v3.1 (free)"},
+    {"id": "moonshotai/kimi-k2:free", "name": "Moonshot: Kimi K2 (free)"},
 ]
 
 
@@ -501,17 +497,21 @@ def _fetch_models() -> list:
                                      headers={"User-Agent": "Untitled-desktop"})
         with urllib.request.urlopen(req, timeout=10) as r:
             data = json.load(r)["data"]
+        # Free models only: both prompt and completion tokens cost 0.
         models = sorted(
-            ({"id": m["id"], "name": m.get("name") or m["id"],
-              "free": str(m.get("pricing", {}).get("prompt", "1")) == "0"}
-             for m in data),
+            ({"id": m["id"], "name": m.get("name") or m["id"], "free": True}
+             for m in data
+             if str(m.get("pricing", {}).get("prompt", "1")) == "0"
+             and str(m.get("pricing", {}).get("completion", "1")) == "0"),
             key=lambda m: m["id"])
+        if not models:
+            models = [dict(m, free=True) for m in _FALLBACK_MODELS]
         _MODELS_CACHE["ts"], _MODELS_CACHE["models"] = now, models
         return models
     except Exception:
         if _MODELS_CACHE["models"]:
             return _MODELS_CACHE["models"]  # stale cache beats a fake list
-        return [dict(m, free=False) for m in _FALLBACK_MODELS]
+        return [dict(m, free=True) for m in _FALLBACK_MODELS]
 
 
 def _models_get(self) -> None:
@@ -859,6 +859,13 @@ def _prewarm():
         # Load keys saved via the Settings UI so the gateway daemon sees them.
         try:
             _load_saved_env()
+        except Exception:
+            pass
+        # Free-models-only default: if the user never picked a model, pin the
+        # engine to OpenRouter's free router instead of the paid auto ladder.
+        try:
+            if not _read_model():
+                _write_model("openrouter/free")
         except Exception:
             pass
         try:
