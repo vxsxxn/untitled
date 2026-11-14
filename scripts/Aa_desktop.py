@@ -78,12 +78,14 @@ PAGE = """<!doctype html>
 </style></head>
 <body>
 <header>Untitled<small>desktop</small><span id="st" title="checking engine…"></span><button class="hbtn" id="modsBtn" title="Mods" onclick="openMods()">&#128268;</button><button class="hbtn" id="gear" title="Settings" onclick="openSettings()">&#9881;</button></header>
+<div id="banner" style="display:none;padding:10px 16px;background:#fdf3d7;color:#6b5b1e;border-bottom:1px solid #e6d9a8;font-size:14px">One step left: open <a href="#" id="bannerGear" style="font-weight:600">&#9881; Settings</a> and paste your OpenRouter key — <a href="https://openrouter.ai/keys" target="_blank">get a free one here</a>.</div>
 <div id="log"></div>
 <form id="f"><textarea id="t" placeholder="Message Untitled…" autofocus></textarea><button>Send</button></form>
 <div id="modal" class="modal"><div class="card">
   <h2>Settings</h2>
   <div><label>OpenRouter API key</label>
-    <input id="sKey" type="password" placeholder="sk-or-… (leave blank to keep)"></div>
+    <input id="sKey" type="password" placeholder="sk-or-… (leave blank to keep)">
+    <small style="color:var(--dim)">free key: <a href="https://openrouter.ai/keys" target="_blank" style="color:inherit">openrouter.ai/keys</a></small></div>
   <div><label>Model <small id="sModelHint" style="color:var(--dim)"></small></label>
     <input id="sModelSearch" placeholder="search models…" autocomplete="off">
     <select id="sModel" size="7" style="width:100%;background:var(--soft);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:4px;font:inherit"></select>
@@ -139,6 +141,12 @@ async function toggleMod(name,on,row){
   }catch(e){msgEl.textContent='error: '+e;}
 }
 const st=document.getElementById('st');
+document.getElementById('bannerGear').onclick=e=>{e.preventDefault();openSettings();};
+fetch('/settings').then(r=>r.json()).then(s=>{
+  if(!s.api_key_set)document.getElementById('banner').style.display='block';}).catch(()=>{});
+t.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();
+    if(!busy&&t.value.trim())f.requestSubmit();}});
 function poll(){fetch('/health').then(r=>r.json()).then(h=>{st.className=h.state;st.title='engine: '+h.state+(h.detail?' — '+h.detail:'')}).catch(()=>{st.className='degraded';st.title='engine unreachable'})}
 poll();setInterval(poll,5000);
 let MODELS=[];let CURRENT='';
@@ -200,7 +208,9 @@ async function saveSettings(){
                                   ||document.getElementById('sModel').value||'').trim()})});
     const d=await r.json();
     if(d.error){msgEl.textContent='error: '+d.error;return;}
-    msgEl.textContent='saved.';setTimeout(closeSettings,600);
+    msgEl.textContent='saved.';
+    if(document.getElementById('sKey').value.trim())document.getElementById('banner').style.display='none';
+    setTimeout(closeSettings,600);
   }catch(e){msgEl.textContent='error: '+e;}
 }
 function add(cls,text){const d=document.createElement('div');d.className='m '+cls;
