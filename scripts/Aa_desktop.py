@@ -96,6 +96,7 @@ PAGE = """<!doctype html>
     <textarea id="sAllow" rows="4" style="width:100%;background:var(--soft);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font:inherit;font-family:monospace"></textarea></div>
   <div id="settingsMsg"></div>
   <div class="row"><button type="button" class="secondary" onclick="closeSettings()">Cancel</button>
+    <button type="button" class="secondary" onclick="testKey()">Test key</button>
     <button type="button" onclick="saveSettings()">Save</button></div>
 </div></div>
 <div id="mmodal" class="modal"><div class="card">
@@ -150,6 +151,12 @@ async function openSettings(){
   }catch(e){document.getElementById('settingsMsg').textContent='load failed: '+e;}
 }
 function closeSettings(){document.getElementById('modal').classList.remove('open');}
+async function testKey(){
+  const msgEl=document.getElementById('settingsMsg');msgEl.textContent='testing key against OpenRouter…';
+  try{const r=await fetch('/test-key');const d=await r.json();
+    msgEl.textContent=(d.ok?'OK: ':'PROBLEM: ')+d.detail;}
+  catch(e){msgEl.textContent='error: '+e;}
+}
 async function saveSettings(){
   const msgEl=document.getElementById('settingsMsg');msgEl.textContent='saving…';
   try{
@@ -385,6 +392,71 @@ def _settings_post(self, payload: dict) -> None:
     self._send(200, b'{"ok":true}', "application/json")
 
 
+def _stored_key() -> str:
+    """The saved OpenRouter key, same resolution order the engine turn uses."""
+    try:
+        from tools.secret_store import get as secret_get
+        k = secret_get(_SETTINGS_KEY)
+        if k:
+            return k.strip()
+    except Exception:
+        pass
+    k = os.environ.get("OPENROUTER_API_KEY")
+    env_path = os.path.join(_hermes_home(), ".env")
+    if not k and os.path.isfile(env_path):
+        try:
+            for line in open(env_path):
+                if line.startswith("OPENROUTER_API_KEY="):
+                    k = line.split("=", 1)[1].strip()
+        except OSError:
+            pass
+    return (k or "").strip()
+
+
+def _test_key(self) -> None:
+    """Ask OpenRouter to validate the saved key and report the real reason on failure."""
+    key = _stored_key()
+    if not key:
+        return self._send(200, json.dumps(
+            {"ok": False, "detail": "No key saved yet — paste one and press Save first."}).encode(),
+            "application/json")
+    masked = (key[:7] + "…" + key[-4:]) if len(key) > 15 else "(short key)"
+    if not key.startswith("sk-or-"):
+        return self._send(200, json.dumps(
+            {"ok": False, "detail": "Saved key doesn't look like an OpenRouter key "
+             "(keys start with sk-or-). Got: " + masked}).encode(), "application/json")
+    try:
+        import urllib.request, urllib.error
+        req = urllib.request.Request(
+            "https://openrouter.ai/api/v1/key",
+            headers={"Authorization": "Bearer " + key})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            body = json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        try:
+            detail = json.loads(e.read().decode()).get("error", {}).get("message", str(e))
+        except Exception:
+            detail = f"HTTP {e.code}"
+        hint = {"User not found": "OpenRouter doesn't recognize this key — it was deleted, "
+                "revoked, or copied incompletely. Create a new key and copy the whole string."}.get(
+                    detail, "OpenRouter rejected the key.")
+        return self._send(200, json.dumps(
+            {"ok": False, "detail": f"OpenRouter says: {detail.rstrip('.')}. {hint}"}).encode(),
+            "application/json")
+    except Exception as e:
+        return self._send(200, json.dumps(
+            {"ok": False, "detail": f"Could not reach OpenRouter: {e}"}).encode(),
+            "application/json")
+    data = body.get("data", {})
+    label = data.get("label") or "(unnamed key)"
+    limit = data.get("limit")
+    usage = data.get("usage")
+    spend = f", ${usage} of {limit if limit is not None else 'unlimited'} used" if usage is not None else ""
+    return self._send(200, json.dumps(
+        {"ok": True, "detail": f"Key '{masked}' is valid ({label}{spend})."}).encode(),
+        "application/json")
+
+
 def _approvals_get() -> dict:
     try:
         from hermes_cli.config import load_config_readonly
@@ -537,6 +609,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, json.dumps(_engine_state).encode(), "application/json")
         if self.path == "/settings":
             return _settings_get(self)
+        if self.path == "/test-key":
+            return _test_key(self)
         if self.path == "/mods":
             return self._send(200, json.dumps({"mods": _list_mods()}).encode(), "application/json")
         self._send(200, PAGE.encode(), "text/html; charset=utf-8")
