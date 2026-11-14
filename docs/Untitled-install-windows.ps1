@@ -5,7 +5,7 @@
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$RepoUrl = "https://github.com/vxsxxn/untitled/archive/refs/heads/untitled.zip"
+$RepoUrl = "https://github.com/vxsxxn/aa/archive/refs/heads/untitled.zip"
 $Dest    = Join-Path $HOME "untitled"
 
 Write-Host ""
