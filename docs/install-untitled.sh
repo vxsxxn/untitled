@@ -1180,7 +1180,7 @@ stage_complete() {
         "$INSTALL_DIR/.hermes/bin/hermes" update --set-channel "$CHANNEL" \
             || fail "could not save the $CHANNEL update channel" other
     fi
-    log_success "Untitled install complete. Run: hermes"
+    log_success "Untitled install complete. Run: Untitled"
 }
 
 print_path_reload_hint() {

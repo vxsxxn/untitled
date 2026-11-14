@@ -5,7 +5,7 @@ echo "Downloading the Untitled installer..."
 curl -fsSL https://untitled-aa.pages.dev/install-untitled.sh -o untitled-install.sh || { echo "Download failed - check your internet connection."; echo; echo "Close this window when done."; read -n 1; exit 1; }
 bash untitled-install.sh
 echo
-echo "Install finished. If it says done, reopen Terminal and type: hermes"
+echo "Install finished. If it says done, reopen Terminal and type: Untitled"
 echo
 echo "Press any key to close this window."
 read -n 1

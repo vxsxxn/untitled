@@ -12,4 +12,4 @@ developer account. This installer is a plain script, so macOS blocks the
 double-click and strips its execute permission. It is not malware - you
 can open the file and read it. The command in step 2 runs it directly.
 
-After it finishes, open a new Terminal window and type: hermes
+After it finishes, open a new Terminal window and type: Untitled
