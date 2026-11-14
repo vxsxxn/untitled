@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>What's next for Untitled · Untitled</title>
+  <meta name="description" content="Vault logins and taking over the screen when a site fights back.">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f7f7; --fg: #111; --muted: #5a5a5a; --line: #d8d8d8;
+      --card: #fff; --soft: #efefef;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0c0c0c; --fg: #f3f3f3; --muted: #9a9a9a;
+        --line: #2a2a2a; --card: #151515; --soft: #1c1c1c;
+      }
+    }
+    body { margin:0; background:var(--bg); color:var(--fg);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+      font-size:16px; line-height:1.55; }
+    a { color:var(--fg); text-underline-offset:3px; }
+    a:hover { opacity:0.7; }
+    .wrap { width:min(720px,calc(100% - 2rem)); margin:0 auto; }
+    header.nav { position:sticky; top:0; z-index:10; backdrop-filter:blur(10px);
+      background:color-mix(in srgb,var(--bg) 85%,transparent); border-bottom:1px solid var(--line); }
+    .nav-inner { display:flex; align-items:center; justify-content:space-between;
+      padding:.9rem 0; gap:1rem; }
+    .brand { font-weight:700; text-decoration:none; }
+    .nav-links a { margin-left:1.1rem; text-decoration:none; font-size:.95rem; }
+    h1 { font-size:2rem; letter-spacing:-0.02em; margin:3rem 0 .5rem; }
+    .kicker { color:var(--muted); font-size:.85rem; text-transform:uppercase;
+      letter-spacing:.08em; margin:2.6rem 0 .3rem; }
+    .lead { color:var(--muted); font-size:1.1rem; margin:0 0 1.5rem; }
+    .cap { margin:1.1rem 0; }
+    .diagram { background:var(--card); border:1px solid var(--line); border-radius:10px;
+      padding:.9rem 1rem; margin:1.4rem 0; }
+    .diagram pre { margin:0; overflow-x:auto;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:.8rem; line-height:1.45; color:var(--fg); }
+    .next { border-top:1px solid var(--line); margin-top:2.5rem; padding-top:1.2rem;
+      color:var(--muted); }
+    .post { border-top:1px solid var(--line); padding:1.4rem 0; }
+    .post a { text-decoration:none; font-weight:600; font-size:1.15rem; }
+    .post p { margin:.3rem 0 .8rem; color:var(--muted); font-size:.95rem; }
+    .thumb { background:var(--card); border:1px solid var(--line); border-radius:10px;
+      display:block; padding:.8rem 1rem; }
+    .thumb pre { margin:0; overflow-x:auto; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:.8rem; line-height:1.45; color:var(--fg); }
+    footer { border-top:1px solid var(--line); margin-top:3.5rem; padding:2rem 0 3rem;
+      color:var(--muted); font-size:.9rem; }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="/">Untitled</a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="/">Home</a>
+        <a href="/blog/">Blog</a>
+        <a href="https://github.com/vxsxxn/untitled">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+<p class="kicker">About the app</p>
+    <h1>What's next for Untitled</h1>
+    <p class="lead">Two features we're building because they're the two moments everyone gets stuck.</p>
+    <div class="diagram"><pre>  stuck point #1   the site wants a login the agent can't do
+    → vault logins:   the app holds your logins, encrypted;
+                      the agent uses them, never sees them
+
+  stuck point #2   the site demands a human (CAPTCHA, 2FA)
+    → screen handoff: the app shows you the exact moment,
+                      you take over in one click, hand back</pre></div>
+<p class="cap">Vault logins come first. Most real tasks die at a login screen, and pasting passwords into a chat is the one habit we refuse to encourage. The vault already exists in the engine; we're wiring it into the desktop flow so it feels like "the app knows this site" instead of "I managed credentials again".</p>
+<p class="cap">Then the screen handoff. Today, when a site demands a human, the agent stops and says so. Next, the app will mirror the browser view at that exact moment: you type the CAPTCHA or the code, and the task continues. No screenshots sent anywhere — the mirror is local, same as everything else.</p>
+<p class="cap">After that: fewer clicks in approvals, a mod system for adding abilities, and whatever you tell us is still in the way. <a href="https://github.com/vxsxxn/untitled/issues">Tell us.</a></p>
+  </main>
+
+  <footer><div class="wrap">Untitled · MIT License · Based on Hermes Agent by Nous Research</div></footer>
+</body>
+</html>

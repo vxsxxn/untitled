@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Installing Untitled · Untitled</title>
+  <meta name="description" content="Two minutes on Mac, Windows, or Linux.">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f7f7; --fg: #111; --muted: #5a5a5a; --line: #d8d8d8;
+      --card: #fff; --soft: #efefef;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0c0c0c; --fg: #f3f3f3; --muted: #9a9a9a;
+        --line: #2a2a2a; --card: #151515; --soft: #1c1c1c;
+      }
+    }
+    body { margin:0; background:var(--bg); color:var(--fg);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+      font-size:16px; line-height:1.55; }
+    a { color:var(--fg); text-underline-offset:3px; }
+    a:hover { opacity:0.7; }
+    .wrap { width:min(720px,calc(100% - 2rem)); margin:0 auto; }
+    header.nav { position:sticky; top:0; z-index:10; backdrop-filter:blur(10px);
+      background:color-mix(in srgb,var(--bg) 85%,transparent); border-bottom:1px solid var(--line); }
+    .nav-inner { display:flex; align-items:center; justify-content:space-between;
+      padding:.9rem 0; gap:1rem; }
+    .brand { font-weight:700; text-decoration:none; }
+    .nav-links a { margin-left:1.1rem; text-decoration:none; font-size:.95rem; }
+    h1 { font-size:2rem; letter-spacing:-0.02em; margin:3rem 0 .5rem; }
+    .kicker { color:var(--muted); font-size:.85rem; text-transform:uppercase;
+      letter-spacing:.08em; margin:2.6rem 0 .3rem; }
+    .lead { color:var(--muted); font-size:1.1rem; margin:0 0 1.5rem; }
+    .cap { margin:1.1rem 0; }
+    .diagram { background:var(--card); border:1px solid var(--line); border-radius:10px;
+      padding:.9rem 1rem; margin:1.4rem 0; }
+    .diagram pre { margin:0; overflow-x:auto;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:.8rem; line-height:1.45; color:var(--fg); }
+    .next { border-top:1px solid var(--line); margin-top:2.5rem; padding-top:1.2rem;
+      color:var(--muted); }
+    .post { border-top:1px solid var(--line); padding:1.4rem 0; }
+    .post a { text-decoration:none; font-weight:600; font-size:1.15rem; }
+    .post p { margin:.3rem 0 .8rem; color:var(--muted); font-size:.95rem; }
+    .thumb { background:var(--card); border:1px solid var(--line); border-radius:10px;
+      display:block; padding:.8rem 1rem; }
+    .thumb pre { margin:0; overflow-x:auto; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+      font-size:.8rem; line-height:1.45; color:var(--fg); }
+    footer { border-top:1px solid var(--line); margin-top:3.5rem; padding:2rem 0 3rem;
+      color:var(--muted); font-size:.9rem; }
+  </style>
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="/">Untitled</a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="/">Home</a>
+        <a href="/blog/">Blog</a>
+        <a href="https://github.com/vxsxxn/untitled">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+<p class="kicker">About the app</p>
+    <h1>Installing Untitled</h1>
+    <p class="lead">Download, double-click, done.</p>
+    <div class="diagram"><pre>  Mac:     download Untitled-install-mac.zip
+           double-click the .command file
+
+  Windows: download Untitled-install-windows.ps1
+           in PowerShell:
+           powershell -ExecutionPolicy Bypass -File .\Untitled-install-windows.ps1
+
+  Linux:   download Untitled-install-linux.sh
+           bash Untitled-install-linux.sh</pre></div>
+<p class="cap">The installer clones the repo into <code>~/untitled</code>, sets up Python in a private folder (it won't touch your system Python), and launches the desktop app. Your browser opens to the app's own address — there's no cloud dashboard, it lives on your machine.</p>
+<p class="cap">First run, it walks you through setup in plain language: paste your API key into Settings and you're talking to it. Everything it asks for is visible later in Settings, and nothing is collected.</p>
+<p class="cap">Updating is the same gesture — run the installer again and it updates the existing copy instead of reinstalling. Uninstalling is deleting the folder.</p>
+    <div class="next">
+      Next: <a href="/blog/roadmap/">What's next for Untitled</a>
+    </div>
+  </main>
+
+  <footer><div class="wrap">Untitled · MIT License · Based on Hermes Agent by Nous Research</div></footer>
+</body>
+</html>
