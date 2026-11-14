@@ -12,9 +12,20 @@ Write-Host "Untitled Desktop installer" -ForegroundColor Gray
 
 # 1. Check prerequisites -------------------------------------------------
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-  Write-Host "git is required. Install it with:  winget install --id Git.Git -e"
-  Write-Host "(then re-open PowerShell and run this script again)"
-  exit 1
+  Write-Host ""
+  Write-Host "Installing git (needed to download the code - one time, ~1 min)" -ForegroundColor Gray
+  if (Get-Command winget -ErrorAction SilentlyContinue) {
+    winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements --silent
+    # winget installs to a fresh PATH entry - pick it up without reopening PowerShell
+    $gitPath = "$env:ProgramFiles\Git\cmd"
+    if (Test-Path $gitPath) { $env:Path = "$gitPath;$env:Path" }
+  }
+  if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    Write-Host "Could not install git automatically. Install it with:" -ForegroundColor Yellow
+    Write-Host "  winget install --id Git.Git -e"
+    Write-Host "(then re-open PowerShell and run this script again)"
+    exit 1
+  }
 }
 
 # 2. Get the code ---------------------------------------------------------

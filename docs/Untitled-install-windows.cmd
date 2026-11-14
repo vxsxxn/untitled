@@ -13,7 +13,8 @@ powershell -ExecutionPolicy ByPass -NoProfile -Command "try { iex (irm 'https://
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo  Installation failed. Check your internet connection and try again.
+    echo  Installation didn't finish. The reason is printed above.
+    echo  Fix it if you can, then run this file again.
     echo.
     pause
     exit /b 1
