@@ -12,7 +12,10 @@ Write-Host ""
 Write-Host "Untitled Desktop installer" -ForegroundColor Gray
 
 # 1. Get the code (zip download - no git needed) ---------------------------
-if (Test-Path (Join-Path $Dest ".git")) {
+if (Test-Path (Join-Path $Dest "scripts\Aa_desktop.py")) {
+  Write-Host ""
+  Write-Host "Untitled is already in $Dest - skipping download." -ForegroundColor Gray
+} elseif (Test-Path (Join-Path $Dest ".git")) {
   # old git-based install: keep using git if it exists
   Write-Host ""
   Write-Host "Updating existing copy in $Dest" -ForegroundColor Gray
@@ -47,6 +50,29 @@ Write-Host ""
 Write-Host "Setting up (first run downloads Python + packages - may take a few minutes)" -ForegroundColor Gray
 uv sync --frozen
 
-# 4. Launch -------------------------------------------------------------------
+# 4. Launcher shortcut so it shows up in the Start Menu and Desktop ---------
+$Launcher = Join-Path $Dest "Untitled.cmd"
+@"
+@echo off
+cd /d "%~dp0"
+set "PATH=%USERPROFILE%\.local\bin;%PATH%"
+uv run --frozen scripts/Aa_desktop.py
+"@ | Set-Content -Path $Launcher -Encoding ASCII
+
+$Wsh = New-Object -ComObject WScript.Shell
+foreach ($folder in @(
+    [Environment]::GetFolderPath("Desktop"),
+    (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"))) {
+  if (-not $folder) { continue }
+  $lnk = $Wsh.CreateShortcut((Join-Path $folder "Untitled.lnk"))
+  $lnk.TargetPath = $Launcher
+  $lnk.WorkingDirectory = $Dest
+  $lnk.Description = "Untitled Desktop"
+  $lnk.Save()
+}
+Write-Host ""
+Write-Host "Added an 'Untitled' shortcut to your Desktop and Start Menu." -ForegroundColor Gray
+
+# 5. Launch -------------------------------------------------------------------
 Write-Host "Starting Untitled Desktop (your browser will open - paste your OpenRouter API key in Settings)" -ForegroundColor Gray
 uv run --frozen scripts/Aa_desktop.py
