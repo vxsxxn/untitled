@@ -63,6 +63,10 @@ PAGE = """<!doctype html>
   .Untitled{align-self:flex-start;background:var(--aai);border:1px solid var(--line)}
   .Untitled.pending::after{content:"…";color:var(--dim);animation:bl 1s steps(2) infinite}
   @keyframes bl{50%{opacity:.3}}
+  .m pre{background:#2d2d2d;color:#e8e8e8;padding:9px 12px;border-radius:8px;
+         overflow-x:auto;margin:6px 0;font-size:13px;white-space:pre}
+  .m code{background:#2d2d2d;color:#e8e8e8;border-radius:5px;padding:1px 5px;font-size:13px}
+  .m pre code{background:none;padding:0}
   form{display:flex;gap:8px;padding:12px;background:var(--panel);border-top:1px solid var(--line)}
   textarea{flex:1;background:var(--soft);color:var(--fg);border:1px solid var(--line);
            border-radius:10px;padding:10px 12px;font:inherit;resize:none;height:44px}
@@ -77,7 +81,7 @@ PAGE = """<!doctype html>
   #st.ready{background:#3ecf6e}#st.warming{background:#e6b23e}#st.degraded{background:#d05050}
 </style></head>
 <body>
-<header>Untitled<small>desktop</small><span id="st" title="checking engine…"></span><button class="hbtn" id="modsBtn" title="Mods" onclick="openMods()">&#128268;</button><button class="hbtn" id="gear" title="Settings" onclick="openSettings()">&#9881;</button></header>
+<header>Untitled<small>desktop</small><span id="st" title="checking engine…"></span><button class="hbtn" id="newBtn" title="New chat" onclick="newChat()">＋</button><button class="hbtn" id="modsBtn" title="Mods" onclick="openMods()">&#128268;</button><button class="hbtn" id="gear" title="Settings" onclick="openSettings()">&#9881;</button></header>
 <div id="banner" style="display:none;padding:10px 16px;background:#fdf3d7;color:#6b5b1e;border-bottom:1px solid #e6d9a8;font-size:14px">One step left: open <a href="#" id="bannerGear" style="font-weight:600">&#9881; Settings</a> and paste your OpenRouter key — <a href="https://openrouter.ai/keys" target="_blank">get a free one here</a>.</div>
 <div id="log"></div>
 <form id="f"><textarea id="t" placeholder="Message Untitled…" autofocus></textarea><button>Send</button></form>
@@ -144,6 +148,10 @@ const st=document.getElementById('st');
 document.getElementById('bannerGear').onclick=e=>{e.preventDefault();openSettings();};
 fetch('/settings').then(r=>r.json()).then(s=>{
   if(!s.api_key_set)document.getElementById('banner').style.display='block';}).catch(()=>{});
+fetch('/history').then(r=>r.json()).then(d=>{
+  for(const m of (d.history||[]).slice(-200))
+    add(m.role==='me'?'me':'Untitled',m.text,m.role!=='me');
+  log.scrollTop=log.scrollHeight;}).catch(()=>{});
 t.addEventListener('keydown',e=>{
   if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();
     if(!busy&&t.value.trim())f.requestSubmit();}});
@@ -213,22 +221,47 @@ async function saveSettings(){
     setTimeout(closeSettings,600);
   }catch(e){msgEl.textContent='error: '+e;}
 }
-function add(cls,text){const d=document.createElement('div');d.className='m '+cls;
-  d.textContent=text;log.appendChild(d);log.scrollTop=log.scrollHeight;return d;}
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function md(s){let h=esc(s);
+  h=h.replace(/```[\\w-]*\\n?([\\s\\S]*?)```/g,(m,c)=>'<pre><code>'+c.replace(/\\n$/,'')+'</code></pre>');
+  h=h.replace(/`([^`\\n]+)`/g,'<code>$1</code>');
+  h=h.replace(/^#{1,3} (.*)$/gm,'<b>$1</b>');
+  h=h.replace(/\\*\\*([^*\\n]+)\\*\\*/g,'<b>$1</b>').replace(/(^|[^*])\\*([^*\\n]+)\\*/g,'$1<i>$2</i>');
+  h=h.replace(/\\[([^\\]]+)\\]\\((https?:[^)\\s]+)\\)/g,'<a href="$2" target="_blank">$1</a>');
+  h=h.replace(/^[-*] (.*)$/gm,'• $1');
+  return h.replace(/\\n/g,'<br>');}
+function add(cls,text,rich){const d=document.createElement('div');d.className='m '+cls;
+  if(rich)d.innerHTML=md(text);else d.textContent=text;
+  log.appendChild(d);log.scrollTop=log.scrollHeight;return d;}
+async function newChat(){
+  try{await fetch('/new',{method:'POST'});}catch(e){}
+  log.innerHTML='';
+  add('Untitled','New chat — the view and saved history were cleared.',true);
+}
 f.onsubmit=async e=>{
   e.preventDefault();
   if(busy||!t.value.trim())return;
   busy=true;f.querySelector('button').disabled=true;
   add('me',t.value);
   const bubble=add('Untitled pending',''),msg=t.value;t.value='';
+  const finish=()=>{bubble.classList.remove('pending');busy=false;
+    f.querySelector('button').disabled=false;t.focus();};
   try{
     const r=await fetch('/send',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
     const data=await r.json();
-    bubble.textContent=data.reply||('error: '+(data.error||r.status));
-  }catch(err){bubble.textContent='error: '+err;}
-  bubble.classList.remove('pending');
-  busy=false;f.querySelector('button').disabled=false;t.focus();
+    if(data.error){bubble.textContent='error: '+data.error;finish();return;}
+    const iv=setInterval(async()=>{
+      try{
+        const p=await(await fetch('/progress')).json();
+        if(!p.done&&p.text)
+          bubble.textContent=p.text.split('\\n').filter(Boolean).slice(-12).join('\\n')||'…';
+        if(p.done){clearInterval(iv);
+          if(p.reply)bubble.innerHTML=md(p.reply);
+          finish();}
+      }catch(e){}
+    },700);
+  }catch(err){bubble.textContent='error: '+err;finish();}
 };
 </script></body></html>"""
 
@@ -238,8 +271,52 @@ _turn_lock = threading.Lock()
 
 _engine_state = {"state": "starting", "detail": ""}  # updated by _prewarm
 
+_TURN = {"id": 0, "partial": "", "done": True, "reply": ""}  # current/last turn
 
-def run_turn(message: str) -> str:
+import re as _re
+_ANSI = _re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+class _StreamOut:
+    """stdout capture that also exposes partial output for live polling."""
+
+    def __init__(self):
+        import io
+        self._buf = io.StringIO()
+
+    def write(self, s):
+        self._buf.write(s)
+        _TURN["partial"] = _ANSI.sub("", self._buf.getvalue())[-8000:]
+
+    def flush(self):
+        pass
+
+    def getvalue(self):
+        return self._buf.getvalue()
+
+
+def _history_path() -> str:
+    return os.path.join(_hermes_home(), "desktop_history.json")
+
+
+def _history_load() -> list:
+    try:
+        with open(_history_path()) as fh:
+            data = json.load(fh)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _history_save(entries: list) -> None:
+    try:
+        with open(_history_path(), "w") as fh:
+            json.dump(entries[-200:], fh)
+    except OSError:
+        pass
+
+
+def run_turn(message: str, out=None) -> str:
     """One chat turn through the engine, in-process via the gateway.
 
     The gateway daemon stays warm between turns (started once, reused), so a
@@ -270,7 +347,9 @@ def run_turn(message: str) -> str:
     parser, _subparsers, _chat = build_top_level_parser()
 
     args = parser.parse_args(["-z", message])
-    out, err = io.StringIO(), io.StringIO()
+    if out is None:
+        out = io.StringIO()
+    err = io.StringIO()
     try:
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), _turn_lock:
             code = launch_from_args(args)
@@ -709,6 +788,14 @@ class Handler(BaseHTTPRequestHandler):
             return _models_get(self)
         if self.path == "/mods":
             return self._send(200, json.dumps({"mods": _list_mods()}).encode(), "application/json")
+        if self.path == "/progress":
+            return self._send(200, json.dumps({
+                "done": _TURN["done"], "text": _TURN["partial"],
+                "reply": _TURN["reply"] if _TURN["done"] else None,
+            }).encode(), "application/json")
+        if self.path == "/history":
+            return self._send(200, json.dumps({"history": _history_load()}).encode(),
+                              "application/json")
         self._send(200, PAGE.encode(), "text/html; charset=utf-8")
 
     def do_POST(self):
@@ -729,6 +816,9 @@ class Handler(BaseHTTPRequestHandler):
             if err:
                 return self._send(400, json.dumps({"error": err}).encode(), "application/json")
             return self._send(200, b'{"ok":true}', "application/json")
+        if self.path == "/new":
+            _history_save([])
+            return self._send(200, b'{"ok":true}', "application/json")
         if self.path != "/send":
             return self._send(404, b'{"error":"not found"}', "application/json")
         try:
@@ -738,11 +828,27 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, b'{"error":"bad request"}', "application/json")
         if not msg.strip():
             return self._send(400, b'{"error":"empty message"}', "application/json")
-        # One worker at a time: a turn holds the agent lock anyway.
-        msg = _run_hook("on_message", msg)
-        out = _run_hook("on_reply", run_turn(msg))
-        body = json.dumps({"reply": out.strip() or "(no output)"}).encode()
-        self._send(200, body, "application/json")
+        if not _TURN["done"]:
+            return self._send(409, b'{"error":"a reply is still being written - wait for it"}',
+                              "application/json")
+        _TURN.update(id=_TURN["id"] + 1, partial="", done=False, reply="")
+        hist = _history_load()
+        hist.append({"role": "me", "text": msg})
+        _history_save(hist)
+
+        def work():
+            try:
+                _msg = _run_hook("on_message", msg)
+                reply = _run_hook("on_reply", run_turn(_msg, out=_StreamOut()))
+            except Exception as exc:
+                reply = f"error: engine turn failed ({exc})"
+            _TURN["reply"] = reply.strip() or "(no output)"
+            hist.append({"role": "untitled", "text": _TURN["reply"]})
+            _history_save(hist)
+            _TURN["done"] = True
+
+        threading.Thread(target=work, daemon=True).start()
+        return self._send(200, json.dumps({"id": _TURN["id"]}).encode(), "application/json")
 
 
 def _prewarm():
