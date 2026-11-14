@@ -50,7 +50,29 @@ Write-Host ""
 Write-Host "Setting up (first run downloads Python + packages - may take a few minutes)" -ForegroundColor Gray
 uv sync --frozen
 
-# 4. Launcher shortcut so it shows up in the Start Menu and Desktop ---------
+# 4. App icon -----------------------------------------------------------------
+# Used by the shortcuts so Untitled looks like a program, not a script.
+$Icon = Join-Path $Dest "untitled.ico"
+try { Invoke-WebRequest -Uri "https://untitled-aa.pages.dev/untitled.ico" -OutFile $Icon -UseBasicParsing } catch { }
+
+# 5. Launcher shortcut so it shows up in the Start Menu and Desktop -----------
+# Launches pythonw.exe directly: real window, no console box, no re-download.
+$Pyw = Join-Path $Dest ".venv\Scripts\pythonw.exe"
+if (-not (Test-Path $Pyw)) { $Pyw = Join-Path $Dest ".venv\Scripts\python.exe" }
+$Wsh = New-Object -ComObject WScript.Shell
+foreach ($folder in @(
+    [Environment]::GetFolderPath("Desktop"),
+    (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"))) {
+  if (-not $folder) { continue }
+  $lnk = $Wsh.CreateShortcut((Join-Path $folder "Untitled.lnk"))
+  $lnk.TargetPath = $Pyw
+  $lnk.Arguments = "scripts\Aa_desktop.py"
+  $lnk.WorkingDirectory = $Dest
+  $lnk.Description = "Untitled Desktop"
+  if (Test-Path $Icon) { $lnk.IconLocation = $Icon }
+  $lnk.Save()
+}
+# Console fallback for debugging (kept, but not what the shortcuts use).
 $Launcher = Join-Path $Dest "Untitled.cmd"
 @"
 @echo off
@@ -59,20 +81,13 @@ set "PATH=%USERPROFILE%\.local\bin;%PATH%"
 uv run --frozen scripts/Aa_desktop.py
 "@ | Set-Content -Path $Launcher -Encoding ASCII
 
-$Wsh = New-Object -ComObject WScript.Shell
-foreach ($folder in @(
-    [Environment]::GetFolderPath("Desktop"),
-    (Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"))) {
-  if (-not $folder) { continue }
-  $lnk = $Wsh.CreateShortcut((Join-Path $folder "Untitled.lnk"))
-  $lnk.TargetPath = $Launcher
-  $lnk.WorkingDirectory = $Dest
-  $lnk.Description = "Untitled Desktop"
-  $lnk.Save()
-}
 Write-Host ""
 Write-Host "Added an 'Untitled' shortcut to your Desktop and Start Menu." -ForegroundColor Gray
 
-# 5. Launch -------------------------------------------------------------------
-Write-Host "Starting Untitled Desktop (your browser will open - paste your OpenRouter API key in Settings)" -ForegroundColor Gray
-uv run --frozen scripts/Aa_desktop.py
+# 6. Launch --------------------------------------------------------------------
+Write-Host "Starting Untitled (app window opens - paste your OpenRouter API key in Settings)" -ForegroundColor Gray
+if (Test-Path (Join-Path $Dest ".venv\Scripts\pythonw.exe")) {
+  Start-Process -FilePath $Pyw -ArgumentList "scripts\Aa_desktop.py" -WorkingDirectory $Dest
+} else {
+  uv run --frozen scripts/Aa_desktop.py
+}

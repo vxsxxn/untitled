@@ -242,7 +242,10 @@ def run_turn(message: str) -> str:
 
 def _run_turn_subprocess(message: str, note: str) -> str:
     """Fallback: the original one-shot spawn (slow, only if in-process import fails)."""
-    _venv_py = os.path.join(ROOT, ".venv", "bin", "python")
+    if os.name == "nt":
+        _venv_py = os.path.join(ROOT, ".venv", "Scripts", "python.exe")
+    else:
+        _venv_py = os.path.join(ROOT, ".venv", "bin", "python")
     py = _venv_py if os.path.isfile(_venv_py) else sys.executable
     env = dict(os.environ)
     env["PYTHONPATH"] = ROOT + os.pathsep + env.get("PYTHONPATH", "")
@@ -681,16 +684,30 @@ def main():
     _prewarm()
 
     port = args.port
-    srv = ThreadingHTTPServer(("127.0.0.1", port if port else 0), Handler)
+    bind = "127.0.0.1"
+    srv = ThreadingHTTPServer((bind, port if port else 0), Handler)
     port = srv.server_address[1]
-    url = f"http://127.0.0.1:{port}"
+    url = f"http://{bind}:{port}"
     print(f"Untitled desktop listening on {url}", flush=True)
-    if not args.no_open:
-        threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    if args.no_open:
+        try:
+            srv.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        return
     try:
-        srv.serve_forever()
-    except KeyboardInterrupt:
-        pass
+        import webview  # native app window; no browser tab
+        webview.create_window("Untitled", url, width=1100, height=760)
+        webview.start()  # blocks until the window is closed, then we exit
+        return
+    except Exception as e:
+        print(f"native window unavailable ({e.__class__.__name__}) - opening browser", flush=True)
+        threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+        try:
+            srv.serve_forever()
+        except KeyboardInterrupt:
+            pass
 
 
 if __name__ == "__main__":
