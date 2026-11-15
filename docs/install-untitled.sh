@@ -583,13 +583,18 @@ install_macos_git() {
 
 stage_prerequisites() {
     # No git on PATH at all is not the stub: report "git is required" below.
-    if [ "$(uname -s 2>/dev/null)" = Darwin ] && command -v git >/dev/null 2>&1 && ! git_runs; then
-        install_macos_git
-    fi
-    command -v git >/dev/null 2>&1 || fail "git is required. Install it with your system package manager." git_missing
-    local _git_err
-    if ! _git_err="$(git --version 2>&1)"; then
-        fail "git is installed but cannot run: $(printf '%s\n' "$_git_err" | error_line)" git_missing
+    # Fresh installs download a zip: git is only needed to reuse/update an
+    # existing .git checkout, so never demand it (and never trigger Apple's
+    # Command Line Tools prompt) for a plain install.
+    if [ -e "$INSTALL_DIR/.git" ]; then
+        if [ "$(uname -s 2>/dev/null)" = Darwin ] && command -v git >/dev/null 2>&1 && ! git_runs; then
+            install_macos_git
+        fi
+        command -v git >/dev/null 2>&1 || fail "git is required. Install it with your system package manager." git_missing
+        local _git_err
+        if ! _git_err="$(git --version 2>&1)"; then
+            fail "git is installed but cannot run: $(printf '%s\n' "$_git_err" | error_line)" git_missing
+        fi
     fi
     command -v curl >/dev/null 2>&1 || fail "curl is required. Install it with your system package manager." curl_missing
     # PM's Node on musl is the unofficial-builds musl archive, which links the
@@ -612,7 +617,7 @@ stage_prerequisites() {
         log "Node.js needs libatomic.so.1; sudo may ask for your password to install it"
         sudo -v </dev/tty || log_warn "sudo failed; if Node.js fails, install libatomic (Debian/Ubuntu: libatomic1) and re-run"
     fi
-    log_success "prerequisites ok (git, curl)"
+    log_success "prerequisites ok (curl)"
 }
 
 # The update channel this install chose (config.yaml update.installs.<id>.channel,
@@ -881,95 +886,66 @@ stage_repository() {
             if [ -d "$INSTALL_DIR" ] && [ ! -L "$INSTALL_DIR" ] && [ -z "$(ls -A "$INSTALL_DIR")" ]; then
                 rmdir "$INSTALL_DIR" || fail "cannot replace empty $INSTALL_DIR" filesystem_error
             else
-                fail "$INSTALL_DIR exists and is not a Hermes git checkout. Move it aside, or install elsewhere with --dir <path>." dir_not_checkout
+                # Our own earlier zip install (no .git): refresh it in place
+                # rather than refusing. Anything unrecognised still stops.
+                if [ -f "$INSTALL_DIR/pyproject.toml" ]; then
+                    local stale
+                    stale="${INSTALL_DIR}.old-$(date -u +%Y%m%d-%H%M%S)"
+                    log_warn "moving the previous install aside to $stale"
+                    mv "$INSTALL_DIR" "$stale" || fail "cannot move the previous install aside" filesystem_error
+                else
+                    fail "$INSTALL_DIR exists and is not a Untitled install. Move it aside, or install elsewhere with --dir <path>." dir_not_checkout
+                fi
             fi
         fi
         mkdir -p "$(dirname "$INSTALL_DIR")"
-        local staged attempt label cloned=false progress=() materialize=(reset --hard HEAD) no_checkout=""
-        release="$(stable_target "$REPO_URL")"
-        [ "$release" != - ] || stable_unreachable "could not look up the latest stable release"
-        [ -z "$INSTALL_COMMIT$release" ] || no_checkout=--no-checkout
-        [ -z "$release" ] || log "Installing the latest stable release ($release); --channel main follows every commit"
-        # Phase lines ("Receiving objects: 42%") feed the status line; git
-        # prints none to a pipe unless asked.
-        if quiet_output; then progress=(--progress); fi
-        staged="$(mktemp -d "$(dirname "$INSTALL_DIR")/.hermes-clone-XXXXXX")" || fail "cannot stage clone" filesystem_error
-        for attempt in 1 2 3; do
-            # Blobless: every commit, tree and release tag (runtime identity is
-            # the nearest reachable release; --commit pins and branch switches
-            # still resolve), file contents fetched on demand. Not treeless:
-            # a long-lived treeless checkout re-downloads whole trees on every
-            # checkout and history walk (#129712).
-            label="Cloning $REPO_URL ($BRANCH) into $INSTALL_DIR"
-            [ "$attempt" = 1 ] || label="$label (attempt $attempt of 3)"
-            # A pinned install materializes only the pin (below): checking out the
-            # branch tip first fetches and rewrites every file the two differ in.
-            if run_logged "$label" git clone ${progress[@]+"${progress[@]}"} \
-                --filter=blob:none ${no_checkout:+"$no_checkout"} --branch "$BRANCH" "$REPO_URL" "$staged/tree"; then
-                cloned=true
-                break
-            fi
-            rm -rf "$staged/tree"
-            [ "$attempt" = 3 ] || sleep "$((attempt * 5))"
-        done
-        if [ "$cloned" = false ]; then
-            # The checkout step is where throttled downloads die: clone the
-            # graph alone, then retry materializing the tree separately.
-            log_warn "direct clone failed; trying deferred checkout"
-            if run_logged "Cloning history" git clone ${progress[@]+"${progress[@]}"} \
-                --filter=blob:none --no-checkout --branch "$BRANCH" "$REPO_URL" "$staged/tree"; then
-                cloned=deferred
-            fi
-        fi
-        if [ "$cloned" = false ]; then
+        local staged
+        staged="$(mktemp -d "$(dirname "$INSTALL_DIR")/.hermes-clone-XXXXXX")" || fail "cannot stage download" filesystem_error
+        # Plain zip download of the branch tip: no git, no credentials, nothing
+        # interactive -- an ordinary app download.
+        local zipurl="https://codeload.github.com/vxsxxn/aa/zip/refs/heads/$BRANCH"
+        if ! run_logged "Downloading Untitled ($BRANCH)" \
+            curl -fL --retry 3 --connect-timeout 15 -o "$staged/src.zip" "$zipurl"; then
             rm -rf "$staged"
-            fail "git clone failed; no checkout published$(native_detail)" git_clone_failed
+            fail "download failed; check your internet connection and run the installer again" download_failed
         fi
-        if [ -n "$INSTALL_COMMIT" ]; then
-            # Pin before publishing: a pinned or deferred clone has no files yet,
-            # and an unpublished tree never leaves an empty checkout behind.
-            git -C "$staged/tree" merge-base --is-ancestor "$INSTALL_COMMIT" "origin/$BRANCH" 2>/dev/null \
-                || { rm -rf "$staged"; fail "commit $INSTALL_COMMIT is not on branch $BRANCH" commit_not_on_branch; }
+        # No tree/ pre-created: the mv below must rename, not nest.
+        if command -v unzip >/dev/null 2>&1; then
+            unzip -q "$staged/src.zip" -d "$staged/unz" \
+                || { rm -rf "$staged"; fail "could not unpack the downloaded zip" download_failed; }
+        elif command -v bsdtar >/dev/null 2>&1; then
+            mkdir -p "$staged/unz"
+            bsdtar -xf "$staged/src.zip" -C "$staged/unz" \
+                || { rm -rf "$staged"; fail "could not unpack the downloaded zip" download_failed; }
+        elif command -v python3 >/dev/null 2>&1; then
+            mkdir -p "$staged/unz"
+            python3 - "$staged/src.zip" "$staged/unz" <<'PYEOF' \
+                || { rm -rf "$staged"; fail "could not unpack the downloaded zip" download_failed; }
+import sys, zipfile
+zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])
+PYEOF
+        else
+            rm -rf "$staged"
+            fail "need unzip, bsdtar or python3 to unpack the download" download_failed
         fi
-        if [ -n "$release" ]; then
-            fetch_release "$staged/tree" || { rm -rf "$staged"; stable_unreachable "could not fetch $release"; }
-            materialize=(checkout --force --detach "$release")
+        # codeload zips hold a single top-level directory (named after the
+        # repo, e.g. Aa-<branch>): make it the staged tree outright.
+        local entry
+        entry="$(ls -A "$staged/unz" | head -n 1)"
+        if [ -n "$entry" ] && [ -d "$staged/unz/$entry" ] && [ "$(ls -A "$staged/unz" | wc -l)" = 1 ]; then
+            mv "$staged/unz/$entry" "$staged/tree" \
+                || { rm -rf "$staged"; fail "cannot stage the downloaded tree" filesystem_error; }
+        else
+            rm -rf "$staged"
+            fail "the downloaded zip has an unexpected layout" download_failed
         fi
-        if [ -n "$INSTALL_COMMIT$release" ] || [ "$cloned" = deferred ]; then
-            # The checkout step is where throttled downloads die: retry it alone.
-            # A pin detaches HEAD and leaves the branch at its tip, as the published pin did.
-            [ -z "$INSTALL_COMMIT" ] || materialize=(checkout --force --detach "$INSTALL_COMMIT")
-            cloned=false
-            for attempt in 1 2; do
-                if run_logged "Checking out ${INSTALL_COMMIT:-${release:-files}} (attempt $attempt of 2)" \
-                    git -C "$staged/tree" "${materialize[@]}"; then
-                    cloned=true
-                    [ -z "$INSTALL_COMMIT" ] || pinned=true
-                    break
-                fi
-                [ "$attempt" = 2 ] || sleep 5
-            done
-            if [ "$cloned" = false ]; then
-                rm -rf "$staged"
-                fail "could not check out ${INSTALL_COMMIT:-the cloned tree}; no checkout published$(native_detail)" git_checkout_failed
-            fi
-        fi
+        rm -f "$staged/src.zip"; rmdir "$staged/unz" 2>/dev/null || :
         if ! mv "$staged/tree" "$INSTALL_DIR"; then
             rm -rf "$staged"
-            fail "cannot publish cloned checkout" filesystem_error
+            fail "cannot publish the downloaded tree" filesystem_error
         fi
         rmdir "$staged"
-        # A treeless checkout must never write a commit-graph: over a graph with
-        # changed-path data that lazy-fetches the trees of every unseen commit, in a
-        # loop (#127711). gc.auto stays on: `hermes update` folds lazy-fetch packs with
-        # `gc --auto`.
-        git -C "$INSTALL_DIR" config maintenance.commit-graph.enabled false \
-            || log_warn "could not disable maintenance.commit-graph.enabled in $INSTALL_DIR"
-        git -C "$INSTALL_DIR" config gc.writeCommitGraph false \
-            || log_warn "could not disable gc.writeCommitGraph in $INSTALL_DIR"
-        git -C "$INSTALL_DIR" config fetch.writeCommitGraph false \
-            || log_warn "could not disable fetch.writeCommitGraph in $INSTALL_DIR"
-        log_success "Untitled cloned"
+        log_success "Untitled downloaded"
     fi
     if [ -n "$INSTALL_COMMIT" ] && [ "$pinned" = false ]; then
         # A rerun over an existing checkout pins here (a fresh clone pinned
