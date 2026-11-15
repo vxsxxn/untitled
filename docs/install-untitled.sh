@@ -1156,7 +1156,17 @@ stage_complete() {
         "$INSTALL_DIR/.hermes/bin/hermes" update --set-channel "$CHANNEL" \
             || fail "could not save the $CHANNEL update channel" other
     fi
-    log_success "Untitled install complete. Run: Untitled"
+    # The command users type must actually exist. The internal launcher name
+    # stays `hermes`, but the product command is `untitled`: symlink it into
+    # ~/.local/bin (already on PATH via the rc edits above) plus a capital-U
+    # twin so either case works.
+    _bin="$HOME/.local/bin"
+    if mkdir -p "$_bin" && [ -x "$INSTALL_DIR/.hermes/bin/hermes" ]; then
+        ln -sf "$INSTALL_DIR/.hermes/bin/hermes" "$_bin/untitled" \
+            && ln -sf "$_bin/untitled" "$_bin/Untitled" \
+            && log_success "command ready: untitled (and Untitled)"
+    fi
+    log_success "Untitled install complete. Run: untitled"
 }
 
 print_path_reload_hint() {
