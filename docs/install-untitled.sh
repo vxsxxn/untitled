@@ -20,7 +20,7 @@ set -u
 # hygiene can't break the locked sync the way it used to before pm owned it.
 export UV_NO_CONFIG=1
 
-REPO_URL="${HERMES_REPO_URL:-https://github.com/vxsxxn/untitled.git}"
+REPO_URL="${HERMES_REPO_URL:-https://github.com/vxsxxn/aa.git}"
 BRANCH="untitled"
 INSTALL_COMMIT=""
 # The update channel to install: stable (the latest published release, the default for the
