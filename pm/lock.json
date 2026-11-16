@@ -475,8 +475,8 @@
           "url": "https://nodejs.org/dist/v26.12.1/node-v26.12.1-darwin-arm64.tar.xz"
         },
         "darwin-x64": {
-          "sha256": "69316aaafb4dfcb25ac7b9a460f5c60928a37580284fde410144d0e6c8672d0f",
-          "url": "https://nodejs.org/dist/v26.12.1/node-v26.12.1-darwin-x64.tar.xz"
+          "sha256": "0ae5a24c24bb7d015cd816c5036b3f90f2945aa872fcf54e58da054753b3a299",
+          "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-x64.tar.xz"
         },
         "linux-arm64": {
           "sha256": "42aa04922591ee5d4dbc7740d452621acf28508239daa512f5ee8c47ee224fdb",
@@ -507,7 +507,7 @@
           "url": "https://nodejs.org/dist/v26.12.1/node-v26.12.1-win-x64.zip"
         }
       },
-      "version": "26.12.1"
+      "version": "24.21.0"
     },
     "npm": {
       "artifacts": {
