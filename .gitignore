@@ -72,6 +72,7 @@ privvy*
 images/
 __pycache__/
 hermes_agent.egg-info/
+untitled.egg-info/
 wandb/
 testlogs
 playwright-report/
