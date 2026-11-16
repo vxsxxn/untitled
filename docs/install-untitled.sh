@@ -929,15 +929,18 @@ PYEOF
             fail "need unzip, bsdtar or python3 to unpack the download" download_failed
         fi
         # codeload zips hold a single top-level directory (named after the
-        # repo, e.g. Aa-<branch>): make it the staged tree outright.
-        local entry
-        entry="$(ls -A "$staged/unz" | head -n 1)"
-        if [ -n "$entry" ] && [ -d "$staged/unz/$entry" ] && [ "$(ls -A "$staged/unz" | wc -l)" = 1 ]; then
+        # repo, e.g. untitled-<branch>): make it the staged tree outright.
+        local entry extras
+        entry="$(find "$staged/unz" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n 1)"
+        entry="${entry##*/}"
+        extras="$(find "$staged/unz" -mindepth 1 -maxdepth 1 ! -type d 2>/dev/null | head -n 5)"
+        if [ -n "$entry" ] && [ -z "$extras" ]; then
             mv "$staged/unz/$entry" "$staged/tree" \
                 || { rm -rf "$staged"; fail "cannot stage the downloaded tree" filesystem_error; }
         else
+            local layout; layout="$(ls -A "$staged/unz" 2>/dev/null | head -n 5 | tr '\n' ' ')"
             rm -rf "$staged"
-            fail "the downloaded zip has an unexpected layout" download_failed
+            fail "the downloaded zip has an unexpected layout (top entries: $layout)" download_failed
         fi
         rm -f "$staged/src.zip"; rmdir "$staged/unz" 2>/dev/null || :
         if ! mv "$staged/tree" "$INSTALL_DIR"; then
